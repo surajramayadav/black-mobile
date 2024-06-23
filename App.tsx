@@ -1,118 +1,137 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import { View, Text, SafeAreaView, StatusBar, TextInput, TouchableOpacity } from 'react-native'
+import React from 'react'
+import { checkPermissionStatus, getUserPermission } from './src/functions/permission'
+import GetLocation from 'react-native-get-location'
+import BackgroundFetch from "react-native-background-fetch";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDeviceName, getDeviceToken } from './src/functions/deviceInfo';
+import axios from 'axios';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+export default function App() {
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+  const [Name, setName] = React.useState("")
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+  React.useEffect(() => {
+    captureLocation()
+  }, [])
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const captureLocation = async () => {
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+    if (await checkPermissionStatus()) {
+      getLocation()
+    } else {
+      await getUserPermission()
+      getLocation()
+    }
+    configureBackgroundFetch()
+  }
+
+
+  const configureBackgroundFetch = () => {
+    BackgroundFetch.configure(
+      {
+        minimumFetchInterval: 15, // minutes
+        stopOnTerminate: false, // Continue background fetch when the app is terminated
+        startOnBoot: true, // Start background fetch when the device is rebooted
+        enableHeadless: true,
+        forceAlarmManager: true,
+      },
+      backgroundFetchHandler,
+      (error: any) => {
+        console.log('[BackgroundFetch] failed to start: ', error);
+      },
+    );
+    BackgroundFetch.status((status: any) => {
+      switch (status) {
+        case BackgroundFetch.STATUS_RESTRICTED:
+          console.log('BackgroundFetch restricted');
+          break;
+        case BackgroundFetch.STATUS_DENIED:
+          console.log('BackgroundFetch denied');
+          break;
+        case BackgroundFetch.STATUS_AVAILABLE:
+          console.log('BackgroundFetch is enabled');
+          break;
+      }
+    });
   };
 
+  const backgroundFetchHandler = async (taskId: any) => {
+    console.log('[BackgroundFetch] taskId: ', taskId);
+    getLocation()
+    BackgroundFetch.finish(taskId);
+  };
+
+  const getLocation = () => {
+    GetLocation.getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 60000,
+    })
+      .then(async (location) => {
+        console.log(location);
+        callApi(location)
+      })
+      .catch(error => {
+        const { code, message } = error;
+        console.warn(code, message);
+      })
+  }
+
+
+  const callApi = async (location: any) => {
+    const body = {
+      "location": {
+        "latitude": location.latitude,
+        "longitude": location.longitude
+      },
+      "device_name": await getDeviceName(),
+      "device_id": await getDeviceToken(),
+      "user_info": {
+        "name": await AsyncStorage.getItem("name") || "name is not entered"
+      }
+    }
+    console.log("body", body)
+    const { data } = await axios.post("https://black-backend-o5mk.onrender.com/api/v1/user/add", body)
+    console.log("api response", data)
+  }
+
+  const saveName = async () => {
+    AsyncStorage.setItem("name", Name)
+    if (!await checkPermissionStatus()) {
+      await getUserPermission()
+    }
+  }
+
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
+    <SafeAreaView style={{ flex: 1, backgroundColor: "black" }}>
+      <StatusBar backgroundColor={"black"} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: "center" }}>
+        <TextInput
+          placeholder='Please Enter Your Name'
+          placeholderTextColor={"grey"}
           style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
+            borderWidth: 1, borderRadius: 10, padding: 15,
+            borderColor: "white", width: "80%", color: "white"
+          }}
+          onChangeText={(e) => setName(e)}
+          value={Name}
+        />
+        <TouchableOpacity
+          onPress={() => saveName()}
+          style={{
+            marginTop: 20,
+            backgroundColor: "blue",
+            width: "80%",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 10,
+            padding: 15
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
+          <Text style={{ color: "white", }}>Save</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
-  );
+
+  )
 }
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
-
-export default App;
