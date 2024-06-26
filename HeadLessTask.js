@@ -3,9 +3,11 @@ import GetLocation from 'react-native-get-location';
 import { getDeviceName, getDeviceToken } from './src/functions/deviceInfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+// import Geolocation from 'react-native-geolocation-service';
+import Geolocation from '@react-native-community/geolocation';
 
 
-const callApi = async (location: any) => {
+const callApi = async (location) => {
   const body = {
     "location": {
       "latitude": location.latitude,
@@ -22,7 +24,7 @@ const callApi = async (location: any) => {
   console.log("api response", data)
 }
 
-const getLocation = () => {
+const getLocation = async () => {
   GetLocation.getCurrentPosition({
     enableHighAccuracy: true,
     timeout: 60000,
@@ -37,10 +39,11 @@ const getLocation = () => {
     })
 }
 
-const headlessTask = async (event: any) => {
+const headlessTask = async (event) => {
   console.log('[BackgroundFetch HeadlessTask] start', event);
   try {
-     getLocation()
+    getLocation()
+    console.log("background fetch datahdhgdgd start")
   }
   catch (error) {
     console.error(error);
@@ -52,3 +55,5 @@ const headlessTask = async (event: any) => {
 
 
 BackgroundFetch.registerHeadlessTask(headlessTask);
+
+
